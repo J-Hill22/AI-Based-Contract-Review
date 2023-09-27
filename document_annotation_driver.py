@@ -1,12 +1,18 @@
-from annotate_contract import annotate_contract
+from flag_FAR_clauses import annotate_contract
 import tkinter
 from tkinter import filedialog
-from docx_parser import _clean_docx
+from contract_to_txt import convert_to_txt, txt_to_docx
+from flag_problem_language import _flag_problem_language
+from docx import Document
 
-# Opens file browser to select Excel spreadsheet containing problematic language
 tkinter.Tk().withdraw()
+# Opens file browser to select Excel spreadsheet containing FAR Clauses
 print("Select FAR Matrix from file browser")
-xls_in = filedialog.askopenfilename()
+FAR_clause_matrix = filedialog.askopenfilename()
+
+# Opens file browser to select Excel spreadsheet containing FAR Clauses
+print("Select AU T&Cs Matrix from file browser")
+tnc_matrix = filedialog.askopenfilename()
 
 # Opens file browser to select document you wish to parse and annotate according to selected spreadsheet
 print("Select contract you wish to annotate")
@@ -17,8 +23,12 @@ print("Select the directory you wish to save annotated contract to")
 save_path = filedialog.asksaveasfilename()
 
 # clean docx and annotate it
-cleaned_docx = _clean_docx(contract_in)
+convert_to_txt(contract_in)
+_flag_problem_language(tnc_matrix)
+back_to_docx = 'flagged_contract_to_txt.txt'
+file_to_highlight = 'flagged_contract_to_docx.docx'
+txt_to_docx(back_to_docx, file_to_highlight)
 
-annotate_contract(xls_in, cleaned_docx, save_path)
+annotate_contract(FAR_clause_matrix, file_to_highlight, save_path)
 
 print("Annotation complete. Output file: " + save_path)
