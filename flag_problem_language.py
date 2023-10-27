@@ -3,6 +3,9 @@ import nltk
 import re
 from nltk.tokenize import word_tokenize, sent_tokenize
 from nltk.corpus import stopwords
+from gensim.models import KeyedVectors
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
 
 def extract_sheet_data(sheet):
 
@@ -51,6 +54,21 @@ def pretty_print_nested_values(dictionary):
         output.append('')  # Add a blank line for separation
     return "\n".join(output)
 
+# Function to get vector representation for a sentence
+def get_sentence_vector(sentence, model):
+    words = [word for word in nltk.word_tokenize(sentence) if word in model.key_to_index and word not in stopwords.words('english')]
+    if not words:
+        return np.zeros(model.vector_size)  # return a zero vector if no word is found
+    vectors = [model[word] for word in words]
+    return sum(vectors) / len(vectors)
+
+def is_sentence_problematic(sentence, model, nn_model, threshold):
+    """Returns True if the sentence is close enough to a known "Common Problem" sentence.
+    The threshold can be adjusted based on requirements."""
+    sentence_vector = get_sentence_vector(sentence, model)
+    distance, _ = nn_model.kneighbors([sentence_vector])
+    return distance[0][0] < threshold
+
 # This function generates a similarity score when comparing two sentences of a contract
 def jaccard_similarity(sentence1, sentence2):
     # Tokenize sentences
@@ -76,32 +94,41 @@ def flag_sentences(tnc_dictionary):
 
     contract_sentences = sent_tokenize(contract_text)
 
-    threshold = 0.15
+    threshold = 0.20
     flagged_sentences = {}
+
+    model = KeyedVectors.load_word2vec_format("G:\Downloads\\archive\GoogleNews-vectors-negative300.bin", binary=True)
+
+    # Nearest Neighbor model setup
+    nn_model = NearestNeighbors(n_neighbors=1, metric='cosine', algorithm='brute')
+
+    common_problems_sentences = []
+    for key in tnc_dictionary:
+        common_problems_sentences.extend(tnc_dictionary[key]['Common Problems'])
+    #print(common_problems_sentences)
+    common_problems_vectors = [get_sentence_vector(sentence, model) for sentence in common_problems_sentences]
+    #print(common_problems_vectors[:10])
+    nn_model.fit(common_problems_vectors)
 
     for key, sub_dict in tnc_dictionary.items():
         if "Common Problems" in sub_dict:
             sheet_name = key
-            preferred_language = sub_dict.get("Auburn's Preferred Language", [])
-            why = sub_dict.get("Why", [])
-            response = sub_dict.get("1st response to Sponsor", [])
+            preferred_language = sub_dict.get("Auburn's Preferred Language", "N/A")
+            why_list = sub_dict.get("Why", [])
+            response_list = sub_dict.get("1st response to Sponsor", [])
+            
             for sentence in contract_sentences:
-                i = 0
-                for value in sub_dict["Common Problems"]:
-                    
-                    similarity = jaccard_similarity(value, sentence)
-                    if similarity > threshold:
+                for i, value in enumerate(sub_dict["Common Problems"]):
+                    if is_sentence_problematic(sentence, model, nn_model, threshold):
                         if sentence not in flagged_sentences:
                             flagged_sentences[sentence] = []
                         flagged_sentences[sentence] = {
                             "Problem Category" : sheet_name,
                             "Common Problems" : value,
                             "Preferred Language" : preferred_language,
-                            "Why" : why[i],
-                            "1st response to Sponsor" : response[i]
-                            # "Confidence" : similarity # Uncomment to show similarity score of flagged language compared to "Common Problems" from T&Cs
+                            "Why" : why_list[i] if i < len(why_list) else "N/A",
+                            "1st response to Sponsor" : response_list[i] if i < len(response_list) else "N/A"
                         }
-                    i += 1
 
     return flagged_sentences
 
