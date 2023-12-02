@@ -119,7 +119,7 @@ def flag_sentences(tnc_dictionary):
             
             for sentence in contract_sentences:
                 for i, value in enumerate(sub_dict["Common Problems"]):
-                    if is_sentence_problematic(sentence, model, nn_model, threshold):
+                    if jaccard_similarity(sentence, value) > 0.12:
                         if sentence not in flagged_sentences:
                             flagged_sentences[sentence] = []
                         flagged_sentences[sentence] = {
